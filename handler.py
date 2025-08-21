@@ -12,9 +12,9 @@ from pathlib import Path
 
 # Конфигурация путей
 COMFYUI_URL = "http://127.0.0.1:8188"
-COMFYUI_PATH = "/workspace/ComfyUI"
-WORKFLOW_PATH = "/workspace/ComfyUI/user/default/workflows/xttsSpeach.json"
-INPUT_DIR = "/workspace/ComfyUI/input"
+COMFYUI_PATH = "/runpod-volume/ComfyUI"
+WORKFLOW_PATH = "/runpod-volume/ComfyUI/user/default/workflows/xttsSpeach.json"
+INPUT_DIR = "/runpod-volume/ComfyUI/input"
 
 # Глобальные переменные
 comfyui_process = None

@@ -2,7 +2,7 @@
 FROM nextdiffusionai/comfyui:latest
 
 # Рабочая директория
-WORKDIR /workspace
+WORKDIR /runpod-volume
 
 # Установка дополнительных аудио зависимостей
 RUN apt-get update && apt-get install -y \
@@ -18,11 +18,11 @@ RUN pip install --no-cache-dir \
     websocket-client
 
 # Копирование handler файла
-COPY handler.py /workspace/
+COPY handler.py /runpod-volume/
 
 # Переменные окружения
 ENV PYTHONUNBUFFERED=1
-ENV COMFYUI_PATH="/workspace/ComfyUI"
+ENV COMFYUI_PATH="/runpod-volume/ComfyUI"
 
 # Команда запуска serverless handler
 CMD ["python", "-u", "handler.py"]
