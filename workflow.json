@@ -1,0 +1,142 @@
+{
+  "17": {
+    "inputs": {
+      "text": "Будет интересно, хотя легким этот день и не назовешь. Чтобы избежать суеты и неразберихи, постарайтесь как можно раньше решить, на чем сосредоточитесь, а потом не отвлекайтесь от выбранного дела на всякие пустяки."
+    },
+    "class_type": "RUAccentize",
+    "_meta": {
+      "title": "Russian Accentizer"
+    }
+  },
+  "8": {
+    "inputs": {
+      "audio": "iron2.WAV",
+      "audioUI": null,
+      "upload": null
+    },
+    "class_type": "LoadAudio",
+    "_meta": {
+      "title": "Sample Audio"
+    }
+  },
+  "25": {
+    "inputs": {
+      "value": "Скажи мне Питер, почему мне звонил твой учитель? Я же сказал, никаких геройств - пока не сдашь ЕГЭ. Я записал тебя в школу Пифагора. Там все репетиторы в одном месте."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Sample Text"
+    }
+  },
+  "14": {
+    "inputs": {
+      "sample_audio": ["8", 0],
+      "sample_text": ["25", 0],
+      "speech": ["17", 0],
+      "seed": 400,
+      "model": "model://RU.pt",
+      "vocoder": "auto",
+      "speed": 1.0,
+      "model_type": "F5TTS_v1_Base"
+    },
+    "class_type": "F5TTSAudioInputs",
+    "_meta": {
+      "title": "F5-TTS Audio Generation"
+    }
+  },
+  "18": {
+    "inputs": {
+      "audio": ["14", 0],
+      "unload_model": true
+    },
+    "class_type": "ClearVoiceRun",
+    "_meta": {
+      "title": "Voice Clearing"
+    }
+  },
+  "19": {
+    "inputs": {
+      "audio": ["18", 0],
+      "volume_factor": 1.0,
+      "pitch_shift": -100,
+      "speed_factor": 1.0,
+      "normalize": true,
+      "add_echo": false,
+      "gain_in": 0.8,
+      "gain_out": 0.88,
+      "delays": 50,
+      "decays": 0.3
+    },
+    "class_type": "AdjustAudio",
+    "_meta": {
+      "title": "Audio Adjustment"
+    }
+  },
+  "20": {
+    "inputs": {
+      "audio": ["19", 0],
+      "min_silence_duration": 0.1,
+      "silence_threshold": 0.2,
+      "buffer_around_silence": false
+    },
+    "class_type": "RemoveSilence",
+    "_meta": {
+      "title": "Silence Removal"
+    }
+  },
+  "22": {
+    "inputs": {
+      "audio": ["20", 0],
+      "pitch_shift": 0.0,
+      "speed_factor": 1.0,
+      "sox_path": "sox",
+      "gain_db": 0.0,
+      "use_limiter": true,
+      "normalize_audio": true,
+      "add_reverb": false,
+      "reverb_amount": 9.702999051898283,
+      "reverb_room_scale": 19.962967117482812,
+      "add_echo": false,
+      "echo_delay": 0.1,
+      "echo_decay": 0.1
+    },
+    "class_type": "AudioQualityEffects",
+    "_meta": {
+      "title": "Audio Effects"
+    }
+  },
+  "21": {
+    "inputs": {
+      "audio": ["22", 0],
+      "enhancement_level": 0.5,
+      "use_source_separation": true,
+      "demucs_model": "htdemucs",
+      "device": "cuda",
+      "vocals_enhance": 0.5,
+      "drums_enhance": 0.6,
+      "bass_enhance": 0.4,
+      "other_enhance": 0.4,
+      "clarity": 0.4,
+      "dynamics": 0.3,
+      "warmth": 0.2,
+      "air": 0.3,
+      "dolby_effect": 0.2,
+      "simple_mode": "Standard",
+      "apply_limiter": true
+    },
+    "class_type": "AudioQualityEnhancer",
+    "_meta": {
+      "title": "Audio Quality Enhancement"
+    }
+  },
+  "9": {
+    "inputs": {
+      "audio": ["21", 0],
+      "audioUI": null
+    },
+    "class_type": "PreviewAudio",
+    "_meta": {
+      "title": "Audio Output"
+    }
+  }
+}
