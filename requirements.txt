@@ -1,4 +1,4 @@
-# Core dependencies для Runpod Serverless
+# Core dependencies для Runpod Services/Serverless
 runpod>=1.7.0
 requests>=2.31.0
 websocket-client>=1.6.0
@@ -12,8 +12,5 @@ scipy>=1.11.0
 
 # Utilities
 python-dotenv>=1.0.0
-pathlib
-uuid
-base64
-io
-json
+
+# Примечание: base64, io, json, pathlib, uuid - это встроенные модули Python, их не нужно устанавливать

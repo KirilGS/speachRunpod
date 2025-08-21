@@ -20,16 +20,17 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Установка RunPod SDK
+# Установка Python зависимостей (убрали base64, io, json - они встроенные)
 RUN pip install --no-cache-dir \
     runpod \
     requests \
     websocket-client \
     pillow \
     numpy \
-    base64 \
-    io \
-    json
+    soundfile \
+    librosa \
+    scipy \
+    python-dotenv
 
 # Копирование handler скрипта
 COPY handler.py /workspace/
@@ -49,9 +50,12 @@ RUN mkdir -p /workspace/temp /workspace/output
 ENV PYTHONPATH="/workspace:${PYTHONPATH}"
 ENV COMFYUI_PATH="/workspace/ComfyUI"
 
-# Запуск init_audio.sh при старте контейнера
+# Запуск init_audio.sh при старте контейнера (если нужно)
 RUN /workspace/init_audio.sh
 RUN /workspace/run_gpu.sh
+
+# Для RunPod Services нужно открыть порт
+EXPOSE 8000
 
 # Команда запуска handler'а
 CMD ["python", "-u", "handler.py"]

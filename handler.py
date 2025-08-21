@@ -11,12 +11,15 @@ import websocket
 import threading
 from urllib.parse import urljoin, urlparse
 from pathlib import Path
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import socketserver
 
 # Глобальные переменные
 COMFYUI_URL = "http://127.0.0.1:8188"
 WORKFLOW_PATH = "/workspace/user/default/workflows/xttsSpeach.json"  # Используем ваш существующий workflow
 OUTPUT_DIR = "/workspace/output"
 TEMP_DIR = "/workspace/temp"
+SERVICE_PORT = int(os.environ.get('RUNPOD_TCP_PORT_8000', 8000))
 
 class ComfyUIClient:
     def __init__(self, server_address):
@@ -219,12 +222,11 @@ def process_audio_generation(params):
         output_files = []
         
         # Ищем выходные аудио файлы в истории выполнения
-        # Node 9 - PreviewAudio является выходной нодой
         if 'outputs' in history:
             for node_id, output in history['outputs'].items():
                 print(f"Проверяем выход ноды {node_id}: {output.keys()}")
                 
-                # Ищем аудио файлы в любых нодах (PreviewAudio, AudioQualityEnhancer и т.д.)
+                # Ищем аудио файлы в любых нодах
                 if 'audio' in output:
                     for audio_info in output['audio']:
                         filename = audio_info['filename']
@@ -235,23 +237,15 @@ def process_audio_generation(params):
                         # Получаем аудио файл
                         audio_data = client.get_audio(filename, subfolder, 'output')
                         if audio_data:
-                            # Сохраняем в выходную директорию
-                            output_filename = f"generated_{uuid.uuid4().hex[:8]}.wav"
-                            output_path = os.path.join(OUTPUT_DIR, output_filename)
-                            
-                            with open(output_path, 'wb') as f:
-                                f.write(audio_data)
-                            
                             # Конвертируем в base64 для возврата
                             audio_base64 = base64.b64encode(audio_data).decode('utf-8')
                             output_files.append({
-                                'filename': output_filename,
+                                'filename': filename,
                                 'audio_base64': audio_base64,
-                                'path': output_path,
                                 'source_node': node_id
                             })
                             
-                            print(f"Аудио файл обработан: {output_filename}")
+                            print(f"Аудио файл обработан: {filename}")
         
         if not output_files:
             print("Детали истории выполнения:")
@@ -269,8 +263,112 @@ def process_audio_generation(params):
         print(f"Ошибка при обработке генерации аудио: {e}")
         return {"error": f"Внутренняя ошибка: {str(e)}"}
 
+class ServiceHandler(BaseHTTPRequestHandler):
+    """HTTP Handler для обработки запросов к сервису"""
+    
+    def do_GET(self):
+        """Обработка GET запросов"""
+        if self.path == '/health':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "healthy"}).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def do_POST(self):
+        """Обработка POST запросов"""
+        try:
+            if self.path == '/generate':
+                # Читаем данные запроса
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                
+                # Парсим JSON
+                try:
+                    job_input = json.loads(post_data.decode('utf-8'))
+                except json.JSONDecodeError as e:
+                    self.send_error_response(400, f"Неверный JSON: {str(e)}")
+                    return
+                
+                # Валидация входных данных
+                if not job_input.get("text"):
+                    self.send_error_response(400, "Параметр 'text' обязателен")
+                    return
+                
+                # Параметры по умолчанию
+                params = {
+                    "text": job_input.get("text"),
+                    "sample_text": job_input.get("sample_text", ""),
+                    "seed": job_input.get("seed", 400),
+                    "speed": job_input.get("speed", 1.0)
+                }
+                
+                # Добавляем sample_audio если предоставлен
+                if job_input.get("sample_audio"):
+                    params["sample_audio"] = job_input["sample_audio"]
+                
+                print(f"Параметры генерации: {params}")
+                
+                # Обрабатываем генерацию
+                result = process_audio_generation(params)
+                
+                # Отправляем ответ
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode())
+                
+                print(f"Результат генерации: {result}")
+                
+            else:
+                self.send_response(404)
+                self.end_headers()
+                
+        except Exception as e:
+            print(f"Ошибка в POST обработчике: {e}")
+            self.send_error_response(500, f"Внутренняя ошибка сервера: {str(e)}")
+    
+    def send_error_response(self, code, message):
+        """Отправляет ошибку в JSON формате"""
+        self.send_response(code)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        error_response = {"error": message}
+        self.wfile.write(json.dumps(error_response).encode())
+
+def init_handler():
+    """Инициализация при запуске"""
+    print("Инициализация F5-TTS Audio Generation Service...")
+    
+    # Создаем необходимые директории
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    
+    # Запускаем ComfyUI сервер
+    if not start_comfyui():
+        print("КРИТИЧЕСКАЯ ОШИБКА: Не удалось запустить ComfyUI")
+        return False
+    
+    print("Service успешно инициализирован")
+    return True
+
+def run_service():
+    """Запуск HTTP сервиса"""
+    try:
+        server = HTTPServer(('0.0.0.0', SERVICE_PORT), ServiceHandler)
+        print(f"F5-TTS Service запущен на порту {SERVICE_PORT}")
+        print("Доступные endpoints:")
+        print(f"  GET  /health - проверка состояния")
+        print(f"  POST /generate - генерация аудио")
+        server.serve_forever()
+    except Exception as e:
+        print(f"Ошибка при запуске сервиса: {e}")
+
+# Serverless handler для совместимости
 def handler(job):
-    """Main handler function для Runpod"""
+    """Handler для Runpod Serverless (если используется)"""
     try:
         print(f"F5-TTS Audio Generation | Starting job {job['id']}")
         
@@ -305,27 +403,18 @@ def handler(job):
         print(f"Ошибка в handler: {e}")
         return {"error": f"Ошибка обработки: {str(e)}"}
 
-def init_handler():
-    """Инициализация при запуске"""
-    print("Инициализация F5-TTS Audio Generation Handler...")
-    
-    # Создаем необходимые директории
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    os.makedirs(TEMP_DIR, exist_ok=True)
-    
-    # Запускаем ComfyUI сервер
-    if not start_comfyui():
-        print("КРИТИЧЕСКАЯ ОШИБКА: Не удалось запустить ComfyUI")
-        return False
-    
-    print("Handler успешно инициализирован")
-    return True
-
 if __name__ == '__main__':
     # Инициализация
     if init_handler():
-        print("Запуск Runpod serverless worker...")
-        runpod.serverless.start({"handler": handler})
+        # Определяем режим работы
+        mode = os.environ.get('RUNPOD_MODE', 'service')
+        
+        if mode == 'serverless':
+            print("Запуск в режиме Runpod Serverless...")
+            runpod.serverless.start({"handler": handler})
+        else:
+            print("Запуск в режиме Runpod Service...")
+            run_service()
     else:
         print("Ошибка инициализации")
         exit(1)
