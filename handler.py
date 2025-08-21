@@ -16,7 +16,7 @@ import socketserver
 
 # Глобальные переменные
 COMFYUI_URL = "http://127.0.0.1:8188"
-WORKFLOW_PATH = "/workspace/user/default/workflows/xttsSpeach.json"  # Используем ваш существующий workflow
+WORKFLOW_PATH = "/workspace/workflow.json"  # Путь к нашему workflow файлу
 OUTPUT_DIR = "/workspace/output"
 TEMP_DIR = "/workspace/temp"
 SERVICE_PORT = int(os.environ.get('RUNPOD_TCP_PORT_8000', 8000))
@@ -105,9 +105,68 @@ def start_comfyui():
     except:
         pass
     
+    # Сначала проверим возможные пути к ComfyUI
+    possible_paths = [
+        "/workspace/ComfyUI",
+        "/comfyui",
+        "/app/ComfyUI",
+        "/workspace"
+    ]
+    
+    comfyui_path = None
+    for path in possible_paths:
+        if os.path.exists(os.path.join(path, "main.py")):
+            comfyui_path = path
+            print(f"Найден ComfyUI в: {path}")
+            break
+    
+    if not comfyui_path:
+        print("Не найден main.py ComfyUI")
+        return False
+    
     # Запускаем сервер
     def run_server():
-        subprocess.run(["/workspace/run_gpu.sh"], cwd="/workspace")
+        try:
+            # Пробуем запустить напрямую
+            os.chdir(comfyui_path)
+            print(f"Запуск ComfyUI из директории: {os.getcwd()}")
+            
+            # Проверяем наличие виртуального окружения
+            venv_paths = [
+                os.path.join(comfyui_path, "venv", "bin", "python"),
+                os.path.join(comfyui_path, ".venv", "bin", "python"),
+                "/opt/conda/bin/python",
+                "python3",
+                "python"
+            ]
+            
+            python_cmd = "python"
+            for venv_path in venv_paths:
+                if os.path.exists(venv_path):
+                    python_cmd = venv_path
+                    print(f"Используем Python: {python_cmd}")
+                    break
+            
+            # Устанавливаем переменные окружения
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
+            env["HF_HOME"] = "/workspace/.cache/huggingface"
+            
+            # Запускаем ComfyUI
+            subprocess.run([
+                python_cmd, "main.py", 
+                "--preview-method", "auto",
+                "--listen", "0.0.0.0", 
+                "--port", "8188"
+            ], cwd=comfyui_path, env=env)
+            
+        except Exception as e:
+            print(f"Ошибка при запуске ComfyUI: {e}")
+            # Fallback - пробуем через наш скрипт
+            try:
+                subprocess.run(["/workspace/run_gpu.sh"], cwd="/workspace")
+            except Exception as e2:
+                print(f"Ошибка при запуске через скрипт: {e2}")
     
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
@@ -122,6 +181,7 @@ def start_comfyui():
                 return True
         except:
             pass
+        print(f"Попытка {i+1}/{max_retries} - ждем запуска ComfyUI...")
         time.sleep(5)
     
     print("Не удалось запустить ComfyUI сервер")

@@ -4,6 +4,13 @@ FROM nextdiffusionai/comfyui:latest
 # Установка рабочей директории
 WORKDIR /workspace
 
+# Диагностика базового образа
+RUN echo "=== Диагностика базового образа ===" && \
+    pwd && \
+    ls -la /workspace && \
+    find /workspace -name "main.py" 2>/dev/null || echo "main.py не найден в /workspace" && \
+    find / -name "main.py" -path "*/ComfyUI/*" 2>/dev/null | head -5 || echo "ComfyUI не найден"
+
 # Установка системных зависимостей для аудио обработки
 RUN apt-get update && apt-get install -y \
     ffmpeg \
@@ -32,12 +39,12 @@ RUN pip install --no-cache-dir \
     scipy \
     python-dotenv
 
-# Копирование handler скрипта
+# Копирование файлов
 COPY handler.py /workspace/
-
-# Копирование скриптов инициализации
-COPY init_audio.sh /workspace/
-COPY run_gpu.sh /workspace/
+# Замена стандартных скриптов на улучшенные версии
+COPY init_audio.sh /workspace/init_audio.sh
+COPY run_gpu.sh /workspace/run_gpu.sh
+COPY workflow.json /workspace/
 
 # Делаем скрипты исполняемыми
 RUN chmod +x /workspace/init_audio.sh
@@ -51,8 +58,7 @@ ENV PYTHONPATH="/workspace:${PYTHONPATH}"
 ENV COMFYUI_PATH="/workspace/ComfyUI"
 
 # Запуск init_audio.sh при старте контейнера (если нужно)
-RUN /workspace/init_audio.sh
-RUN /workspace/run_gpu.sh
+# RUN /workspace/init_audio.sh
 
 # Для RunPod Services нужно открыть порт
 EXPOSE 8000
